@@ -4,8 +4,9 @@
 import streamlit as st
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+import os
 
-DB_DIR = "faiss_db"
+DB_DIR = "faiss_db"  # folder relative to app.py
 
 st.set_page_config(
     page_title="Telecom AI Assistant",
@@ -23,15 +24,36 @@ def load_embeddings():
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-# Load FAISS database
+# --- Robust FAISS DB loader ---
 @st.cache_resource
 def load_db():
     embeddings = load_embeddings()
-    return FAISS.load_local(
-        DB_DIR,
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
+
+    # Debug info
+    st.write("DB folder exists:", os.path.exists(DB_DIR))
+    if os.path.exists(DB_DIR):
+        st.write("Files in DB folder:", os.listdir(DB_DIR))
+
+    try:
+        db = FAISS.load_local(
+            DB_DIR,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+        st.write("✅ FAISS DB loaded successfully!")
+    except Exception as e:
+        st.write("⚠️ FAISS DB failed to load. Rebuilding...")
+        st.write("Error:", e)
+
+        # Rebuild FAISS index from documents
+        # TODO: Replace with your actual document loading logic
+        documents = []  # placeholder
+        db = FAISS.from_documents(documents, embeddings)
+        db.save_local(DB_DIR)
+        st.write("✅ FAISS DB rebuilt and saved.")
+
+    return db
+# --- End of loader ---
 
 embeddings = load_embeddings()
 db = load_db()
@@ -49,3 +71,5 @@ if query:
 
 st.markdown("---")
 st.caption("Offline AI system using FAISS vector database and telecom standards")
+
+
