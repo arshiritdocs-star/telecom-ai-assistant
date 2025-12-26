@@ -1,18 +1,21 @@
+print("CONFIRMED: USING HUGGINGFACE EMBEDDINGS")
+
 import os
 import re
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-import requests
-from bs4 import BeautifulSoup
 
 # ---------------- PATHS ----------------
-DATA_DIR = "data"  # PDFs
-DB_DIR = "faiss_db"
+DATA_DIR = "data"                      # folder containing PDFs
+WIKI_FILE = "telecom_wiki.txt"         # Wikipedia text
+BRITANNICA_FILE = "telecom_britannica.txt"  # Britannica text
+DB_DIR = "faiss_db"                    # folder to save FAISS DB
 
 # ---------------- HELPER FUNCTIONS ----------------
 def clean_text(text):
+    """Clean raw text by removing line breaks, numbering, tables, and unwanted symbols"""
     text = re.sub(r"\n", " ", text)
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)
@@ -21,6 +24,7 @@ def clean_text(text):
     return text.strip()
 
 def deduplicate_sentences(text):
+    """Remove duplicate sentences"""
     sentences = re.split(r'(?<=[.!?]) +', text)
     seen = set()
     deduped = []
@@ -31,56 +35,45 @@ def deduplicate_sentences(text):
             seen.add(s_clean)
     return " ".join(deduped)
 
-def fetch_wiki_text(url):
-    """Fetch and clean text from Wikipedia/online HTML"""
-    res = requests.get(url)
-    soup = BeautifulSoup(res.text, "html.parser")
-    paragraphs = soup.find_all("p")
-    text = " ".join(p.get_text() for p in paragraphs)
-    text = clean_text(text)
-    text = deduplicate_sentences(text)
-    return text
-
 # ---------------- READ PDF TEXT ----------------
 all_text = ""
-print("Reading PDFs from data folder...")
+print("Reading all PDFs from data folder...")
 for file in os.listdir(DATA_DIR):
     if file.endswith(".pdf"):
-        print(f"Reading {file}")
+        print(f"Reading {file} ...")
         reader = PdfReader(os.path.join(DATA_DIR, file))
         for page in reader.pages:
             text = page.extract_text()
             if text:
-                all_text += clean_text(text) + " "
+                all_text += clean_text(text) + "\n\n"
 
-# ---------------- FETCH ONLINE SOURCES ----------------
-wiki_urls = [
-    "https://en.wikipedia.org/wiki/Telecommunication",
-    "https://www.britannica.com/technology/telecommunication"
-]
+# ---------------- READ WIKI TEXT ----------------
+if os.path.exists(WIKI_FILE):
+    print(f"Reading Wikipedia content from {WIKI_FILE} ...")
+    with open(WIKI_FILE, "r", encoding="utf-8") as f:
+        wiki_text = f.read()
+        all_text += "\n\n" + deduplicate_sentences(clean_text(wiki_text))
+else:
+    print("No Wikipedia file found. Skipping.")
 
-print("Fetching Wikipedia and Britannica text...")
-for url in wiki_urls:
-    try:
-        online_text = fetch_wiki_text(url)
-        all_text += online_text + " "
-    except Exception as e:
-        print(f"Failed to fetch {url}: {e}")
+# ---------------- READ BRITANNICA TEXT ----------------
+if os.path.exists(BRITANNICA_FILE):
+    print(f"Reading Britannica content from {BRITANNICA_FILE} ...")
+    with open(BRITANNICA_FILE, "r", encoding="utf-8") as f:
+        brit_text = f.read()
+        all_text += "\n\n" + deduplicate_sentences(clean_text(brit_text))
+else:
+    print("No Britannica file found. Skipping.")
 
 # ---------------- SPLIT INTO CHUNKS ----------------
 print("Splitting text into chunks...")
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
-)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 chunks = text_splitter.split_text(all_text)
 print(f"Total chunks created: {len(chunks)}")
 
-# ---------------- LOAD EMBEDDINGS ----------------
+# ---------------- LOAD HUGGINGFACE EMBEDDINGS ----------------
 print("Creating HuggingFace embeddings...")
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # ---------------- BUILD FAISS INDEX ----------------
 print("Building FAISS index...")
