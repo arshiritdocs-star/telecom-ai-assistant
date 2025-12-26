@@ -58,9 +58,9 @@ def expand_abbreviations(text):
         text = re.sub(rf"\b{abbr}\b", full, text)
     return text
 
-def refine_text(text, query, top_n=5):
+def refine_text(text, query, top_n=3):
     sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences = [s for s in sentences if len(s.split()) > 5]
+    sentences = [s for s in sentences if len(s.split()) > 5]  # discard very short sentences
     keywords = query.lower().split()
     ranked = sorted(sentences, key=lambda s: sum(k in s.lower() for k in keywords), reverse=True)
     cleaned = [clean_text(s) for s in ranked[:top_n]]
@@ -69,7 +69,7 @@ def refine_text(text, query, top_n=5):
 # ---------------- LOAD FREE LLM ----------------
 @st.cache_resource
 def load_llm():
-    model_name = "google/flan-t5-small"  # CPU-friendly
+    model_name = "google/flan-t5-base"  # Slightly bigger CPU-friendly model
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     generator = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
@@ -78,7 +78,7 @@ def load_llm():
 text_generator = load_llm()
 
 def generate_answer(prompt):
-    output = text_generator(prompt, max_length=300, do_sample=True)
+    output = text_generator(prompt, max_length=500, do_sample=True, temperature=0.7)
     return output[0]['generated_text']
 
 # ---------------- USER INPUT ----------------
@@ -93,20 +93,29 @@ if query:
     elif db:
         # ---------------- FAISS RETRIEVAL ----------------
         results = db.similarity_search_with_score(query, k=5)
-        top_docs = [refine_text(d.page_content, query, top_n=5) for d, _ in sorted(results, key=lambda x: x[1], reverse=True)[:5]]
-        context = "\n\n".join(top_docs)
+        
+        # Filter and refine top chunks
+        top_docs_raw = [d.page_content for d, _ in sorted(results, key=lambda x: x[1], reverse=True)]
+        top_docs = []
+        for doc in top_docs_raw:
+            refined = refine_text(doc, query, top_n=3)
+            if len(refined.split()) > 30:  # discard very short chunks
+                top_docs.append(refined)
+        
+        # Merge top 3 chunks for LLM context
+        context = "\n\n".join(top_docs[:3])
 
         if not context.strip():
-            context = "No exact definition found. Showing best-match excerpts."
+            context = "No complete information found. Showing best-match excerpts."
 
         # ---------------- STRUCTURED PROMPT ----------------
         prompt = f"""
-You are a telecom expert. Using the context below, write a clear, human-readable answer.
-Structure your answer with:
-1. Definition
-2. Key Points / Types
-3. Examples (if applicable)
-Do NOT copy single sentences; synthesize into a complete explanation.
+You are a telecom expert. Based on the context below, write a detailed, human-readable paragraph answering the question.
+Include:
+- Definition
+- Key Points / Types
+- Examples (if relevant)
+Do NOT copy sentences verbatim; synthesize into a coherent explanation.
 
 Context:
 {context}
