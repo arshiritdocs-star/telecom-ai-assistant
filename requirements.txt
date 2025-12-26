@@ -1,10 +1,10 @@
 streamlit
-langchain
+langchain==0.1.147
 langchain-community
-langchain-core
 sentence-transformers
 faiss-cpu
 pypdf
 transformers
 torch
+
 
