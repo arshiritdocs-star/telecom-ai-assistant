@@ -10,7 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from langchain_community.vectorstores import FAISS
 
 # HuggingFace embeddings (compatible with langchain==0.1.147)
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 DB_DIR = "faiss_db"  # folder containing your saved FAISS DB
 
@@ -123,3 +123,4 @@ if query:
                     st.write(doc.page_content)
     else:
         st.warning("No FAISS database found. Only glossary definitions are available.")
+
