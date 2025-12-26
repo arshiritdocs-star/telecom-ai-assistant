@@ -69,7 +69,7 @@ def refine_text(text, query, top_n=5):
 # ---------------- LOAD FREE LLM ----------------
 @st.cache_resource
 def load_llm():
-    model_name = "google/flan-t5-small"  # CPU-friendly (~80MB)
+    model_name = "google/flan-t5-small"  # CPU-friendly
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     generator = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
@@ -85,24 +85,28 @@ def generate_answer(prompt):
 query = st.text_input("Enter your telecom question:")
 
 if query:
-    # Glossary fallback
     key = query.lower().strip()
+    # ---------------- GLOSSARY FALLBACK ----------------
     if key in GLOSSARY:
         st.subheader("📡 Glossary Definition")
         st.write(GLOSSARY[key])
     elif db:
-        # FAISS retrieval
+        # ---------------- FAISS RETRIEVAL ----------------
         results = db.similarity_search_with_score(query, k=5)
-        top_docs = [refine_text(d.page_content, query, top_n=5) for d, _ in sorted(results, key=lambda x: x[1], reverse=True)[:3]]
+        top_docs = [refine_text(d.page_content, query, top_n=5) for d, _ in sorted(results, key=lambda x: x[1], reverse=True)[:5]]
         context = "\n\n".join(top_docs)
 
         if not context.strip():
             context = "No exact definition found. Showing best-match excerpts."
 
-        # Prompt for LLM
+        # ---------------- STRUCTURED PROMPT ----------------
         prompt = f"""
 You are a telecom expert. Using the context below, write a clear, human-readable answer.
-Do not copy single phrases; synthesize into a full explanation with definitions, examples, and key points if possible.
+Structure your answer with:
+1. Definition
+2. Key Points / Types
+3. Examples (if applicable)
+Do NOT copy single sentences; synthesize into a complete explanation.
 
 Context:
 {context}
@@ -111,9 +115,10 @@ Question:
 {query}
 """
         answer = generate_answer(prompt)
-        st.subheader("📡 Telecom Expert Answer (LLM Refined)")
+        st.subheader("📡 Telecom Expert Answer")
         st.write(answer)
 
+        # ---------------- SOURCE PASSAGES ----------------
         st.subheader("📎 Source Passages")
         for i, doc in enumerate(top_docs, start=1):
             with st.expander(f"Source {i}"):
