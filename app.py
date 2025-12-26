@@ -1,5 +1,5 @@
 # app.py
-# Free Telecom AI Assistant using Streamlit + FAISS + HuggingFace Embeddings
+# Free Telecom AI Assistant using Streamlit + FAISS + HuggingFace small LLM (CPU-friendly)
 
 import os
 import re
@@ -7,6 +7,8 @@ import streamlit as st
 from sklearn.metrics.pairwise import cosine_similarity
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 
 DB_DIR = "faiss_db"  # folder containing your saved FAISS DB
 
@@ -38,7 +40,7 @@ def load_embeddings():
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-# ---------------- LOAD DATABASE ----------------
+# ---------------- LOAD FAISS DATABASE ----------------
 @st.cache_resource
 def load_db():
     embeddings = load_embeddings()
@@ -57,16 +59,14 @@ db = load_db()
 
 # ---------------- TEXT CLEANING & REFINEMENT ----------------
 def clean_text(text):
-    """Clean raw technical text."""
     text = text.replace("\n", " ")
     text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)           # remove ITU-T style headers
-    text = re.sub(r"SYSTEMS ON [A-Z ]+", "", text)          # remove all caps headings
-    text = re.sub(r"[^\w\s,.()-]", "", text)               # remove special characters
+    text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)
+    text = re.sub(r"SYSTEMS ON [A-Z ]+", "", text)
+    text = re.sub(r"[^\w\s,.()-]", "", text)
     return text.strip()
 
 def expand_abbreviations(text):
-    """Expand key telecom abbreviations."""
     abbreviations = {
         "POTS": "Plain Old Telephone Service (POTS)",
         "GPON": "Gigabit Passive Optical Network (GPON)",
@@ -77,23 +77,37 @@ def expand_abbreviations(text):
     return text
 
 def refine_text(text, query, top_n=5):
-    """
-    Extract relevant sentences and make them human-readable.
-    """
     sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences = [s for s in sentences if len(s.split()) > 5]  # remove short fragments
-
+    sentences = [s for s in sentences if len(s.split()) > 5]
     keywords = query.lower().split()
     ranked = sorted(
         sentences,
         key=lambda s: sum(k in s.lower() for k in keywords),
         reverse=True
     )
-
     cleaned = [clean_text(s) for s in ranked[:top_n]]
     answer = "\n\n".join(cleaned)
-    answer = expand_abbreviations(answer)
-    return answer
+    return expand_abbreviations(answer)
+
+# ---------------- LOAD SMALL CPU-FRIENDLY LLM ----------------
+@st.cache_resource
+def load_llm():
+    model_name = "google/flan-t5-small"  # CPU-friendly small model (~80MB)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    text_generator = pipeline(
+        "text2text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        device=-1  # CPU only
+    )
+    return text_generator
+
+text_generator = load_llm()
+
+def generate_answer(prompt):
+    output = text_generator(prompt, max_length=250, do_sample=True)
+    return output[0]['generated_text']
 
 # ---------------- USER INPUT ----------------
 query = st.text_input("Enter your telecom question:")
@@ -106,37 +120,33 @@ if query:
         st.subheader("📡 Glossary Definition")
         st.write(GLOSSARY[key])
     elif db:
-        # Query FAISS database
+        # FAISS retrieval
         query_emb = embeddings.embed_query(query)
-        results = db.similarity_search_with_score(query, k=8)
+        results = db.similarity_search_with_score(query, k=5)
+        top_docs = [d.page_content for d, _ in sorted(results, key=lambda x: x[1], reverse=True)[:3]]
+        context = "\n\n".join([refine_text(d, query, top_n=3) for d in top_docs])
 
-        rescored = []
-        for doc, _ in results:
-            doc_emb = embeddings.embed_query(doc.page_content)
-            sim = cosine_similarity([query_emb], [doc_emb])[0][0]
-            rescored.append((doc, sim))
+        if not context.strip():
+            context = "No exact definition found. Showing best-match excerpts."
 
-        rescored = sorted(rescored, key=lambda x: x[1], reverse=True)
-        docs = [d for d,_ in rescored[:3]]
+        # Prepare prompt for LLM
+        prompt = f"""You are a telecom expert.
+Answer the following question clearly and human-readable using the context below:
 
-        if not docs:
-            st.error("No matching reference data found in your database.")
-        else:
-            # Combine and refine top documents
-            context = " ".join(
-                refine_text(d.page_content, query, top_n=3)
-                for d in docs
-            )
+Context:
+{context}
 
-            if not context.strip():
-                context = "No exact definition found. Showing best-match excerpts."
+Question:
+{query}
+"""
+        answer = generate_answer(prompt)
+        st.subheader("📡 Telecom Expert Answer (LLM Refined)")
+        st.write(answer)
 
-            st.subheader("📡 Telecom Expert Answer")
-            st.write(context)
-
-            st.subheader("📎 Source Passages")
-            for i, doc in enumerate(docs, start=1):
-                with st.expander(f"Source {i}"):
-                    st.write(clean_text(doc.page_content))
+        # Expandable source passages
+        st.subheader("📎 Source Passages")
+        for i, doc in enumerate(top_docs, start=1):
+            with st.expander(f"Source {i}"):
+                st.write(clean_text(doc))
     else:
         st.warning("No FAISS database found. Only glossary definitions are available.")
