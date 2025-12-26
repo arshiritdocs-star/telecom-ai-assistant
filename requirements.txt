@@ -6,5 +6,8 @@ faiss-cpu
 pypdf
 transformers
 torch
+scikit-learn
+
+
 
 
