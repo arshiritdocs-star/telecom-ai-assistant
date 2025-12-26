@@ -21,14 +21,15 @@ st.title("📡 Telecom AI Assistant")
 st.write("Ask questions related to Telecommunication, GPON, XGS-PON, and broadband systems.")
 
 # ---------------- LOAD EMBEDDINGS ----------------
+import streamlit as st
+from langchain.embeddings import HuggingFaceEmbeddings
+
 @st.cache_resource
 def load_embeddings():
     return HuggingFaceEmbeddings(
-       HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
-
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
+
 
 # ---------------- LOAD DATABASE ----------------
 @st.cache_resource
@@ -129,4 +130,5 @@ if query and db:
         for i, doc in enumerate(docs, start=1):
             with st.expander(f"Source {i}"):
                 st.write(doc.page_content)
+
 
