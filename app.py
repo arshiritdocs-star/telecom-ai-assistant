@@ -42,11 +42,9 @@ def load_embeddings():
 @st.cache_resource
 def load_db():
     embeddings = load_embeddings()
-
     if not os.path.exists(DB_DIR):
         st.warning("FAISS database not found. Only glossary definitions will be available.")
         return None
-
     db = FAISS.load_local(
         DB_DIR,
         embeddings,
@@ -57,15 +55,18 @@ def load_db():
 embeddings = load_embeddings()
 db = load_db()
 
-# ---------------- TEXT CLEANING ----------------
+# ---------------- TEXT CLEANING & REFINEMENT ----------------
 def clean_text(text):
+    """Clean raw technical text."""
     text = text.replace("\n", " ")
     text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)  # remove technical headers
-    text = re.sub(r"[^\w\s,.()-]", "", text)       # remove special characters
+    text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)           # remove ITU-T style headers
+    text = re.sub(r"SYSTEMS ON [A-Z ]+", "", text)          # remove all caps headings
+    text = re.sub(r"[^\w\s,.()-]", "", text)               # remove special characters
     return text.strip()
 
 def expand_abbreviations(text):
+    """Expand key telecom abbreviations."""
     abbreviations = {
         "POTS": "Plain Old Telephone Service (POTS)",
         "GPON": "Gigabit Passive Optical Network (GPON)",
@@ -75,13 +76,12 @@ def expand_abbreviations(text):
         text = re.sub(rf"\b{abbr}\b", full, text)
     return text
 
-# ---------------- EXTRACT RELEVANT SENTENCES ----------------
 def refine_text(text, query, top_n=5):
     """
-    Clean and merge relevant sentences for a human-readable answer.
+    Extract relevant sentences and make them human-readable.
     """
     sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences = [s for s in sentences if len(s.split()) > 5]
+    sentences = [s for s in sentences if len(s.split()) > 5]  # remove short fragments
 
     keywords = query.lower().split()
     ranked = sorted(
@@ -90,12 +90,7 @@ def refine_text(text, query, top_n=5):
         reverse=True
     )
 
-    # Clean and merge sentences
-    cleaned = []
-    for s in ranked[:top_n]:
-        s = clean_text(s)
-        cleaned.append(s.strip())
-
+    cleaned = [clean_text(s) for s in ranked[:top_n]]
     answer = "\n\n".join(cleaned)
     answer = expand_abbreviations(answer)
     return answer
