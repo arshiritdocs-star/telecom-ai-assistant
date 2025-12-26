@@ -22,13 +22,14 @@ st.write("Ask questions related to Telecommunication, GPON, XGS-PON, and broadba
 
 # ---------------- LOAD EMBEDDINGS ----------------
 import streamlit as st
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 
 @st.cache_resource
 def load_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
+
 
 
 # ---------------- LOAD DATABASE ----------------
@@ -130,5 +131,6 @@ if query and db:
         for i, doc in enumerate(docs, start=1):
             with st.expander(f"Source {i}"):
                 st.write(doc.page_content)
+
 
 
