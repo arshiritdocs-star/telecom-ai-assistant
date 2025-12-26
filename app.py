@@ -3,7 +3,7 @@
 
 import streamlit as st
 from langchain_community.vectorstores import FAISS
-from langchain.embeddings.huggingface import HuggingFaceEmbedding
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 import os
 import re
 from sklearn.metrics.pairwise import cosine_similarity
@@ -131,6 +131,7 @@ if query and db:
         for i, doc in enumerate(docs, start=1):
             with st.expander(f"Source {i}"):
                 st.write(doc.page_content)
+
 
 
 
