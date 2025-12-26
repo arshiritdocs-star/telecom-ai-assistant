@@ -9,9 +9,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 # FAISS vectorstore
 from langchain_community.vectorstores import FAISS
 
-# Correct HuggingFace embeddings import
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-
+# HuggingFace embeddings (compatible with langchain==0.1.147)
+from langchain.embeddings import HuggingFaceEmbeddings
 
 DB_DIR = "faiss_db"  # folder containing your saved FAISS DB
 
@@ -26,16 +25,11 @@ st.title("📡 Telecom AI Assistant")
 st.write("Ask questions related to Telecommunication, GPON, XGS-PON, and broadband systems.")
 
 # ---------------- LOAD EMBEDDINGS ----------------
-import streamlit as st
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-
 @st.cache_resource
 def load_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
-
-
 
 # ---------------- LOAD DATABASE ----------------
 @st.cache_resource
@@ -43,7 +37,7 @@ def load_db():
     embeddings = load_embeddings()
 
     if not os.path.exists(DB_DIR):
-        st.error("FAISS database not found. Please make sure 'faiss_db' folder exists.")
+        st.warning("FAISS database not found. The 'faiss_db' folder is missing. The app will still work for glossary queries.")
         return None
 
     db = FAISS.load_local(
@@ -51,9 +45,7 @@ def load_db():
         embeddings,
         allow_dangerous_deserialization=True
     )
-
     return db
-
 
 embeddings = load_embeddings()
 db = load_db()
@@ -70,75 +62,64 @@ GLOSSARY = {
 }
 
 # ----------- Extract relevant sentences ----------
-def extract_relevant_sentences(text, query):
+def extract_relevant_sentences(text, query, top_n=3):
     sentences = re.split(r'(?<=[.!?]) +', text)
+    if len(sentences) == 1:
+        return text
     keywords = query.lower().split()
-
     ranked = sorted(
         sentences,
         key=lambda s: sum(k in s.lower() for k in keywords),
         reverse=True
     )
-
-    return " ".join(ranked[:3])
+    return " ".join(ranked[:top_n])
 
 # ---------------- USER INPUT ----------------
 query = st.text_input("Enter your telecom question:")
 
 # ---------------- PROCESS QUERY ----------------
-if query and db:
+if query:
+    # First check glossary
+    key = query.lower().strip()
+    if key in GLOSSARY:
+        st.subheader("📡 Glossary Definition")
+        st.write(GLOSSARY[key])
+    elif db:  # Query FAISS DB if available
+        query_emb = embeddings.embed_query(query)
+        results = db.similarity_search_with_score(query, k=8)
 
-    query_emb = embeddings.embed_query(query)
-    results = db.similarity_search_with_score(query, k=8)
+        rescored = []
+        for doc, _ in results:
+            doc_emb = embeddings.embed_query(doc.page_content)
+            sim = cosine_similarity([query_emb], [doc_emb])[0][0]
+            rescored.append((doc, sim))
 
-    rescored = []
-    for doc, _ in results:
-        doc_emb = embeddings.embed_query(doc.page_content)
-        sim = cosine_similarity([query_emb], [doc_emb])[0][0]
-        rescored.append((doc, sim))
+        rescored = sorted(rescored, key=lambda x: x[1], reverse=True)
 
-    rescored = sorted(rescored, key=lambda x: x[1], reverse=True)
+        if len(rescored) == 0:
+            st.error("No matching telecom reference data found in your database.")
+        else:
+            top_score = rescored[0][1]
 
-    if len(rescored) == 0:
-        st.error("No matching telecom reference data found in your database.")
-    else:
-        top_score = rescored[0][1]
+            if top_score < 0.10:
+                st.warning("Low-confidence match. Try rephrasing your question.")
 
-        if top_score < 0.10:
-            st.warning("Low-confidence match. Try rephrasing your question.")
-        
-        docs = [d for d,_ in rescored[:3]]
+            docs = [d for d,_ in rescored[:3]]
 
-        def extract_relevant_sentences(text, query):
-            sentences = re.split(r'(?<=[.!?]) +', text)
-            if len(sentences) == 1:
-                return text
-            keywords = query.lower().split()
-            ranked = sorted(
-                sentences,
-                key=lambda s: sum(k in s.lower() for k in keywords),
-                reverse=True
+            context = "\n\n".join(
+                extract_relevant_sentences(d.page_content, query, top_n=4)
+                for d in docs
             )
-            return " ".join(ranked[:4])
 
-        context = "\n\n".join(
-            extract_relevant_sentences(d.page_content, query)
-            for d in docs
-        )
+            if not context.strip():
+                context = "No exact definition found. Displaying best-match telecom reference excerpts."
 
-        if not context.strip():
-            context = "No exact definition found. Displaying best-match telecom reference excerpts."
+            st.subheader("📡 Telecom Expert Answer")
+            st.write(context)
 
-        st.subheader("📡 Telecom Expert Answer")
-        st.write(context)
-
-        st.subheader("📎 Source Passages")
-        for i, doc in enumerate(docs, start=1):
-            with st.expander(f"Source {i}"):
-                st.write(doc.page_content)
-
-
-
-
-
-
+            st.subheader("📎 Source Passages")
+            for i, doc in enumerate(docs, start=1):
+                with st.expander(f"Source {i}"):
+                    st.write(doc.page_content)
+    else:
+        st.warning("No FAISS database found. Only glossary definitions are available.")
