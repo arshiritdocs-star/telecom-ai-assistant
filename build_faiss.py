@@ -6,50 +6,58 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-DATA_DIR = "data"
-DB_DIR = "faiss_db"
+# ---------------- PATHS ----------------
+DATA_DIR = "data"                      # folder containing PDFs
+WIKI_FILE = "telecom_wiki.txt"         # Wikipedia text
+BRITANNICA_FILE = "telecom_britannica.txt"  # Britannica text
+DB_DIR = "faiss_db"                    # folder to save FAISS DB
 
-# -------- READ ALL PDF TEXT --------
+# ---------------- READ PDF TEXT ----------------
 all_text = ""
-
 print("Reading all PDFs from data folder...")
 
 for file in os.listdir(DATA_DIR):
     if file.endswith(".pdf"):
-        print(f"Reading {file}")
+        print(f"Reading {file} ...")
         reader = PdfReader(os.path.join(DATA_DIR, file))
-
         for page in reader.pages:
             text = page.extract_text()
             if text:
-                all_text += text
+                all_text += text + "\n\n"
 
-# -------- SPLIT INTO CHUNKS --------
+# ---------------- READ WIKI TEXT ----------------
+if os.path.exists(WIKI_FILE):
+    print(f"Reading Wikipedia content from {WIKI_FILE} ...")
+    with open(WIKI_FILE, "r", encoding="utf-8") as f:
+        all_text += "\n\n" + f.read()
+else:
+    print("No Wikipedia file found. Skipping.")
+
+# ---------------- READ BRITANNICA TEXT ----------------
+if os.path.exists(BRITANNICA_FILE):
+    print(f"Reading Britannica content from {BRITANNICA_FILE} ...")
+    with open(BRITANNICA_FILE, "r", encoding="utf-8") as f:
+        all_text += "\n\n" + f.read()
+else:
+    print("No Britannica file found. Skipping.")
+
+# ---------------- SPLIT INTO CHUNKS ----------------
 print("Splitting text into chunks...")
-
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
-)
-
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 chunks = text_splitter.split_text(all_text)
-
 print(f"Total chunks created: {len(chunks)}")
 
-# -------- LOAD EMBEDDINGS --------
+# ---------------- LOAD HUGGINGFACE EMBEDDINGS ----------------
 print("Creating HuggingFace embeddings...")
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
-
-# -------- BUILD FAISS INDEX --------
+# ---------------- BUILD FAISS INDEX ----------------
 print("Building FAISS index...")
-
 db = FAISS.from_texts(chunks, embeddings)
 
-# -------- SAVE TO DISK --------
+# ---------------- SAVE TO DISK ----------------
 db.save_local(DB_DIR)
-
 print("✅ Vector database created successfully!")
-print("📁 Saved to folder:", DB_DIR) 
+print("📁 Saved to folder:", DB_DIR)
+
+
