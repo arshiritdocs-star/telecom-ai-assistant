@@ -78,16 +78,8 @@ query = st.text_input("Enter your telecom question:")
 # ---------------- PROCESS QUERY ----------------
 if query and db:
 
-    # Show glossary hints
-    for word in query.lower().split():
-        if word in GLOSSARY:
-            st.info(f"📘 **{word.upper()}**: {GLOSSARY[word]}")
-
-    # Retrieve documents
-    results = db.similarity_search_with_score(query, k=8)
-
-    # Re-rank using cosine similarity
     query_emb = embeddings.embed_query(query)
+    results = db.similarity_search_with_score(query, k=8)
 
     rescored = []
     for doc, _ in results:
@@ -97,19 +89,35 @@ if query and db:
 
     rescored = sorted(rescored, key=lambda x: x[1], reverse=True)
 
-    top_score = rescored[0][1]
-
-    # Confidence threshold
-    if top_score < 0.30:
-        st.warning("❗ No strong match found in the telecom knowledge base. Try rephrasing your question.")
+    if len(rescored) == 0:
+        st.error("No matching telecom reference data found in your database.")
     else:
-        docs = [d for d, _ in rescored[:3]]
+        top_score = rescored[0][1]
 
-        # Build cleaned answer
+        if top_score < 0.10:
+            st.warning("Low-confidence match. Try rephrasing your question.")
+        
+        docs = [d for d,_ in rescored[:3]]
+
+        def extract_relevant_sentences(text, query):
+            sentences = re.split(r'(?<=[.!?]) +', text)
+            if len(sentences) == 1:
+                return text
+            keywords = query.lower().split()
+            ranked = sorted(
+                sentences,
+                key=lambda s: sum(k in s.lower() for k in keywords),
+                reverse=True
+            )
+            return " ".join(ranked[:4])
+
         context = "\n\n".join(
             extract_relevant_sentences(d.page_content, query)
             for d in docs
         )
+
+        if not context.strip():
+            context = "No exact definition found. Displaying best-match telecom reference excerpts."
 
         st.subheader("📡 Telecom Expert Answer")
         st.write(context)
@@ -118,6 +126,3 @@ if query and db:
         for i, doc in enumerate(docs, start=1):
             with st.expander(f"Source {i}"):
                 st.write(doc.page_content)
-
-st.markdown("---")
-st.caption("Offline Telecom AI — FAISS + HuggingFace Embeddings (Free & Private)")
