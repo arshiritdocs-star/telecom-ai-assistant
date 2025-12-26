@@ -8,134 +8,117 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 # ---------------- UI ----------------
 st.set_page_config(page_title="Telecom AI Assistant", page_icon="📡", layout="centered")
 st.title("📡 Telecom AI Assistant")
-st.write("Ask questions about Telecommunication, GPON, XGS-PON, broadband systems, and related concepts.")
+st.write("Ask questions related to Telecommunication, GPON, XGS-PON, and broadband systems.")
 
-# ---------------- PATHS ----------------
 DB_DIR = "faiss_db"
 
 # ---------------- GLOSSARY ----------------
 GLOSSARY = {
-    "gpon": "Gigabit Passive Optical Network — a fiber broadband technology delivering high-speed data using passive splitters.",
-    "xgs-pon": "XGS-PON — 10-Gigabit symmetric Passive Optical Network offering 10 Gbps downlink and uplink.",
-    "olt": "Optical Line Terminal — the service-provider side device controlling PON access.",
-    "onu": "Optical Network Unit — the subscriber-side fiber termination device.",
+    "gpon": "Gigabit Passive Optical Network — a fiber broadband system delivering high-speed internet using passive optical splitters.",
+    "xgs-pon": "10-Gigabit symmetric Passive Optical Network providing 10 Gbps downstream and upstream.",
+    "olt": "Optical Line Terminal — the central office device controlling PON traffic.",
+    "onu": "Optical Network Unit — subscriber-side fiber access device.",
     "ont": "Optical Network Terminal — customer-premises fiber modem.",
-    "bandwidth": "Maximum data transfer rate of a network connection.",
+    "bandwidth": "Maximum rate at which data can be transferred.",
     "latency": "Delay between sending and receiving data."
 }
 
-# ---------------- LOAD EMBEDDINGS ----------------
+# ---------------- LOAD MODELS ----------------
 @st.cache_resource
 def load_embeddings():
     return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# ---------------- LOAD FAISS ----------------
 @st.cache_resource
 def load_db():
     embeddings = load_embeddings()
     if not os.path.exists(DB_DIR):
-        st.warning("FAISS database not found. Only glossary definitions are available.")
+        st.warning("FAISS database not found.")
         return None
     return FAISS.load_local(DB_DIR, embeddings, allow_dangerous_deserialization=True)
 
-embeddings = load_embeddings()
-db = load_db()
-
-# ---------------- CLEANING FUNCTIONS ----------------
-def clean_text(text):
-    text = re.sub(r"\n", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)
-    text = re.sub(r"SYSTEMS ON [A-Z ]+", "", text)
-    text = re.sub(r"[^\w\s,.()-]", "", text)
-    return text.strip()
-
-def deduplicate_sentences(text):
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    seen = set()
-    deduped = []
-    for s in sentences:
-        s_clean = s.strip()
-        if s_clean and s_clean not in seen:
-            deduped.append(s_clean)
-            seen.add(s_clean)
-    return " ".join(deduped)
-
-def expand_abbreviations(text):
-    abbreviations = {
-        "POTS": "Plain Old Telephone Service (POTS)",
-        "GPON": "Gigabit Passive Optical Network (GPON)",
-        "XGS-PON": "10-Gigabit Symmetric Passive Optical Network (XGS-PON)"
-    }
-    for abbr, full in abbreviations.items():
-        text = re.sub(rf"\b{abbr}\b", full, text)
-    return text
-
-def refine_text(text, query, top_n=3):
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences = [s for s in sentences if len(s.split()) > 8]
-    keywords = query.lower().split()
-    ranked = sorted(sentences, key=lambda s: sum(k in s.lower() for k in keywords), reverse=True)
-    cleaned = [clean_text(s) for s in ranked[:top_n]]
-    cleaned = deduplicate_sentences(" ".join(cleaned))
-    return expand_abbreviations(cleaned)
-
-# ---------------- LOAD LLM ----------------
 @st.cache_resource
 def load_llm():
     model_name = "google/flan-t5-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    generator = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
-    return generator
+    return pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
 
-text_generator = load_llm()
+embeddings = load_embeddings()
+db = load_db()
+generator = load_llm()
 
-def generate_answer(prompt):
-    output = text_generator(prompt, max_length=500, do_sample=True, temperature=0.7)
-    return output[0]['generated_text']
+# ---------------- CLEANING ----------------
+def clean_text(text):
+    text = re.sub(r"\n", " ", text)
+    text = re.sub(r"\s+", " ", text)
 
-# ---------------- USER INPUT ----------------
-query = st.text_input("Enter your telecom question:")
+    # remove technical headings & code artifacts
+    text = re.sub(r"G\.\d{3}.*?\s", "", text)
+    text = re.sub(r"SYSTEMS ON [A-Z \-]+", "", text)
+    text = re.sub(r"[^\w\s,.()\-]", "", text)
 
-if query:
-    key = query.lower().strip()
-    if key in GLOSSARY:
-        st.subheader("📡 Glossary Definition")
-        st.write(GLOSSARY[key])
-    elif db:
-        results = db.similarity_search_with_score(query, k=5)
-        top_docs_raw = [d.page_content for d, _ in sorted(results, key=lambda x: x[1], reverse=True)]
-        top_docs = []
-        for doc in top_docs_raw:
-            refined = refine_text(doc, query, top_n=3)
-            if len(refined.split()) > 30:
-                top_docs.append(refined)
-        context = "\n\n".join(top_docs[:3])
-        if not context.strip():
-            context = "No complete information found. Showing best-match excerpts."
+    return text.strip()
 
-        prompt = f"""
-You are a telecom expert. Based on the context below, write a clear, human-readable paragraph answering the question.
-Include:
-- Definition
-- Key Points / Types
-- Examples (if relevant)
-Do NOT copy sentences verbatim; synthesize into a coherent explanation.
+def rank_human_readable(chunks):
+    """Prefer readable sources like Wikipedia / Britannica / reports."""
+    priority_words = [
+        "telecommunications", "is a", "refers to", "service providers",
+        "pon", "xgs", "india", "market", "customer", "technology", "broadband"
+    ]
+
+    def score(text):
+        t = text.lower()
+        return sum(word in t for word in priority_words)
+
+    return sorted(chunks, key=score, reverse=True)
+
+def generate_answer(context, question):
+    prompt = f"""
+You are a friendly telecom expert. Explain clearly using simple language.
+Avoid repeating technical ITU wording. Write fresh sentences.
 
 Context:
 {context}
 
 Question:
-{query}
+{question}
 """
-        answer = generate_answer(prompt)
+    output = generator(prompt, max_length=450, temperature=0.6)
+    return output[0]["generated_text"]
+
+# ---------------- UI INPUT ----------------
+query = st.text_input("Enter your telecom question:")
+
+if query:
+    key = query.lower().strip()
+
+    # glossary first
+    if key in GLOSSARY:
+        st.subheader("📘 Glossary Answer")
+        st.write(GLOSSARY[key])
+
+    elif db:
+        results = db.similarity_search_with_score(query, k=8)
+
+        # lowest score = closest match
+        results = sorted(results, key=lambda x: x[1])
+
+        raw_chunks = [clean_text(doc.page_content) for doc, _ in results]
+
+        readable_chunks = rank_human_readable(raw_chunks)
+
+        # pick best 3
+        context = "\n\n".join(readable_chunks[:3])
+
+        answer = generate_answer(context, query)
+
         st.subheader("📡 Telecom Expert Answer")
         st.write(answer)
 
-        st.subheader("📎 Source Passages")
-        for i, doc in enumerate(top_docs, start=1):
+        st.subheader("📎 Key Source Passages")
+        for i, doc in enumerate(readable_chunks[:3], start=1):
             with st.expander(f"Source {i}"):
                 st.write(doc)
+
     else:
-        st.warning("No FAISS database found. Only glossary definitions are available.")
+        st.warning("Database missing — only glossary works.")
