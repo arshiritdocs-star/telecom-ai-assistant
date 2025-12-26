@@ -1,3 +1,5 @@
+import unzip_data  # runs only once
+
 import os
 import re
 import streamlit as st
@@ -122,3 +124,4 @@ if query:
 
     else:
         st.warning("Database missing — only glossary works.")
+
