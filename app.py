@@ -60,16 +60,50 @@ db = load_db()
 
 query = st.text_input("Enter your telecom question:")
 
+def clean(text):
+    bad_tokens = ["................................................................",
+                  ".....", "Code Point", "Figure", "Table", "Index",
+                  "ISBN", "copyright"]
+    for t in bad_tokens:
+        text = text.replace(t, " ")
+    return " ".join(text.split())
+
 if query:
-    docs = db.similarity_search(query, k=3)
 
-    st.subheader("📘 Relevant Information from Knowledge Base:")
+    # ---- smarter retrieval ----
+    results = db.similarity_search_with_score(query, k=8)
 
+    filtered_docs = []
+    for doc, score in results:
+        if score < 0.45:  # keep only strong matches
+            filtered_docs.append(doc)
+
+    docs = filtered_docs[:3]  # limit to top 3
+
+    # ---- merge & clean ----
+    context = "\n\n".join([clean(d.page_content) for d in docs])
+
+    # ---- create refined answer ----
+    final_answer = f"""
+Telecom Expert Answer:
+
+Based on trusted telecom standards and technical references,
+here is a clear explanation related to your question:
+
+{context}
+
+Summary:
+The retrieved information discusses topics that directly relate 
+to your query. Technical noise and formatting were removed for clarity.
+"""
+
+    st.subheader("📘 Telecom Answer")
+    st.write(final_answer)
+
+    # ---- show sources for transparency ----
+    st.subheader("📎 Sources Used")
     for i, doc in enumerate(docs, start=1):
         with st.expander(f"Source {i}"):
             st.write(doc.page_content)
-
-st.markdown("---")
-st.caption("Offline AI system using FAISS vector database and telecom standards")
 
 
