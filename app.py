@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 # ---------------- UI ----------------
 st.set_page_config(page_title="Telecom AI Assistant", page_icon="📡", layout="centered")
 st.title("📡 Telecom AI Assistant")
-st.write("Ask questions related to Telecommunication, GPON, XGS-PON, and broadband systems.")
+st.write("Ask questions about Telecommunication, GPON, XGS-PON, broadband systems, and related concepts.")
 
 # ---------------- PATHS ----------------
 DB_DIR = "faiss_db"
@@ -41,7 +41,7 @@ def load_db():
 embeddings = load_embeddings()
 db = load_db()
 
-# ---------------- CLEAN & REFINE ----------------
+# ---------------- CLEANING FUNCTIONS ----------------
 def clean_text(text):
     text = re.sub(r"\n", " ", text)
     text = re.sub(r"\s+", " ", text)
@@ -62,23 +62,25 @@ def deduplicate_sentences(text):
     return " ".join(deduped)
 
 def expand_abbreviations(text):
-    abbreviations = {"POTS": "Plain Old Telephone Service (POTS)",
-                     "GPON": "Gigabit Passive Optical Network (GPON)",
-                     "XGS-PON": "10-Gigabit Symmetric Passive Optical Network (XGS-PON)"}
+    abbreviations = {
+        "POTS": "Plain Old Telephone Service (POTS)",
+        "GPON": "Gigabit Passive Optical Network (GPON)",
+        "XGS-PON": "10-Gigabit Symmetric Passive Optical Network (XGS-PON)"
+    }
     for abbr, full in abbreviations.items():
         text = re.sub(rf"\b{abbr}\b", full, text)
     return text
 
 def refine_text(text, query, top_n=3):
     sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences = [s for s in sentences if len(s.split()) > 5]  # discard very short sentences
+    sentences = [s for s in sentences if len(s.split()) > 8]
     keywords = query.lower().split()
     ranked = sorted(sentences, key=lambda s: sum(k in s.lower() for k in keywords), reverse=True)
     cleaned = [clean_text(s) for s in ranked[:top_n]]
     cleaned = deduplicate_sentences(" ".join(cleaned))
     return expand_abbreviations(cleaned)
 
-# ---------------- LOAD FREE LLM ----------------
+# ---------------- LOAD LLM ----------------
 @st.cache_resource
 def load_llm():
     model_name = "google/flan-t5-base"
@@ -98,28 +100,23 @@ query = st.text_input("Enter your telecom question:")
 
 if query:
     key = query.lower().strip()
-    # ---------------- GLOSSARY FALLBACK ----------------
     if key in GLOSSARY:
         st.subheader("📡 Glossary Definition")
         st.write(GLOSSARY[key])
     elif db:
-        # ---------------- FAISS RETRIEVAL ----------------
         results = db.similarity_search_with_score(query, k=5)
         top_docs_raw = [d.page_content for d, _ in sorted(results, key=lambda x: x[1], reverse=True)]
-        
         top_docs = []
         for doc in top_docs_raw:
             refined = refine_text(doc, query, top_n=3)
-            if len(refined.split()) > 30:  # discard very short chunks
+            if len(refined.split()) > 30:
                 top_docs.append(refined)
-        
         context = "\n\n".join(top_docs[:3])
         if not context.strip():
             context = "No complete information found. Showing best-match excerpts."
 
-        # ---------------- STRUCTURED PROMPT ----------------
         prompt = f"""
-You are a telecom expert. Based on the context below, write a detailed, human-readable paragraph answering the question.
+You are a telecom expert. Based on the context below, write a clear, human-readable paragraph answering the question.
 Include:
 - Definition
 - Key Points / Types
@@ -136,7 +133,6 @@ Question:
         st.subheader("📡 Telecom Expert Answer")
         st.write(answer)
 
-        # ---------------- SOURCE PASSAGES ----------------
         st.subheader("📎 Source Passages")
         for i, doc in enumerate(top_docs, start=1):
             with st.expander(f"Source {i}"):
