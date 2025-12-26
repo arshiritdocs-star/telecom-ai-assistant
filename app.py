@@ -50,6 +50,17 @@ def clean_text(text):
     text = re.sub(r"[^\w\s,.()-]", "", text)
     return text.strip()
 
+def deduplicate_sentences(text):
+    sentences = re.split(r'(?<=[.!?]) +', text)
+    seen = set()
+    deduped = []
+    for s in sentences:
+        s_clean = s.strip()
+        if s_clean and s_clean not in seen:
+            deduped.append(s_clean)
+            seen.add(s_clean)
+    return " ".join(deduped)
+
 def expand_abbreviations(text):
     abbreviations = {"POTS": "Plain Old Telephone Service (POTS)",
                      "GPON": "Gigabit Passive Optical Network (GPON)",
@@ -64,12 +75,13 @@ def refine_text(text, query, top_n=3):
     keywords = query.lower().split()
     ranked = sorted(sentences, key=lambda s: sum(k in s.lower() for k in keywords), reverse=True)
     cleaned = [clean_text(s) for s in ranked[:top_n]]
-    return expand_abbreviations("\n\n".join(cleaned))
+    cleaned = deduplicate_sentences(" ".join(cleaned))
+    return expand_abbreviations(cleaned)
 
 # ---------------- LOAD FREE LLM ----------------
 @st.cache_resource
 def load_llm():
-    model_name = "google/flan-t5-base"  # Slightly bigger CPU-friendly model
+    model_name = "google/flan-t5-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     generator = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
@@ -93,18 +105,15 @@ if query:
     elif db:
         # ---------------- FAISS RETRIEVAL ----------------
         results = db.similarity_search_with_score(query, k=5)
-        
-        # Filter and refine top chunks
         top_docs_raw = [d.page_content for d, _ in sorted(results, key=lambda x: x[1], reverse=True)]
+        
         top_docs = []
         for doc in top_docs_raw:
             refined = refine_text(doc, query, top_n=3)
             if len(refined.split()) > 30:  # discard very short chunks
                 top_docs.append(refined)
         
-        # Merge top 3 chunks for LLM context
         context = "\n\n".join(top_docs[:3])
-
         if not context.strip():
             context = "No complete information found. Showing best-match excerpts."
 
