@@ -65,10 +65,23 @@ def clean_text(text):
     text = re.sub(r"[^\w\s,.()-]", "", text)       # remove special characters
     return text.strip()
 
+def expand_abbreviations(text):
+    abbreviations = {
+        "POTS": "Plain Old Telephone Service (POTS)",
+        "GPON": "Gigabit Passive Optical Network (GPON)",
+        "XGS-PON": "10-Gigabit Symmetric Passive Optical Network (XGS-PON)"
+    }
+    for abbr, full in abbreviations.items():
+        text = re.sub(rf"\b{abbr}\b", full, text)
+    return text
+
 # ---------------- EXTRACT RELEVANT SENTENCES ----------------
-def extract_relevant_sentences(text, query, top_n=5):
+def refine_text(text, query, top_n=5):
+    """
+    Clean and merge relevant sentences for a human-readable answer.
+    """
     sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences = [s for s in sentences if len(s.split()) > 5]  # remove short fragments
+    sentences = [s for s in sentences if len(s.split()) > 5]
 
     keywords = query.lower().split()
     ranked = sorted(
@@ -76,8 +89,16 @@ def extract_relevant_sentences(text, query, top_n=5):
         key=lambda s: sum(k in s.lower() for k in keywords),
         reverse=True
     )
-    ranked = [clean_text(s) for s in ranked[:top_n]]
-    return " ".join(ranked)
+
+    # Clean and merge sentences
+    cleaned = []
+    for s in ranked[:top_n]:
+        s = clean_text(s)
+        cleaned.append(s.strip())
+
+    answer = "\n\n".join(cleaned)
+    answer = expand_abbreviations(answer)
+    return answer
 
 # ---------------- USER INPUT ----------------
 query = st.text_input("Enter your telecom question:")
@@ -106,9 +127,9 @@ if query:
         if not docs:
             st.error("No matching reference data found in your database.")
         else:
-            # Combine and clean top documents
+            # Combine and refine top documents
             context = " ".join(
-                extract_relevant_sentences(d.page_content, query, top_n=3)
+                refine_text(d.page_content, query, top_n=3)
                 for d in docs
             )
 
