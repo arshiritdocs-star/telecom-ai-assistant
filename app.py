@@ -7,10 +7,6 @@ from langchain.chains import RetrievalQA
 from langchain_community.llms import HuggingFaceHub
 from build_faiss import build_faiss_if_missing
 
-if not os.path.exists("faiss_db"):
-    build_faiss_if_missing()
-
-
 DB_DIR = "faiss_db"
 
 st.set_page_config(
@@ -93,4 +89,3 @@ if query:
             st.markdown(f"### 🟢 Answer\n{answer}")
         except Exception as e:
             st.error(f"❌ Error: {e}")
-
