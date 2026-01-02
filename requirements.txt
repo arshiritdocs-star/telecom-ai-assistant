@@ -1,21 +1,20 @@
+# Streamlit & UI
 streamlit==1.25.0
 rich==13.3.4
-markdown-it-py<3.0.0  # match rich requirement
+markdown-it-py<3.0.0
 pygments<3.0.0
 mdurl~=0.1
 
-# Langchain
-langchain>=0.0.300,<1.0  # any version <1.0 compatible with 3.10
-langchain-community>=0.3.0  # latest 0.3.x compatible
-langchain-text-splitters>=0.8.0
-
-# Embeddings + models
+# Vector DB + embeddings
 faiss-cpu==1.7.4
 sentence-transformers==2.2.2
 torch==2.2.0
 huggingface-hub==0.17.3
 
+# Langchain
+langchain>=0.0.300,<1.0
+langchain-community>=0.3.0
+langchain-text-splitters>=0.8.0
+
 # PDF processing
 PyPDF2==3.0.1
-pdf2image==1.16.3
-pytesseract==0.3.10
