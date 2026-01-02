@@ -5,20 +5,29 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 from langchain_community.llms import HuggingFaceHub
-
+from build_faiss import build_faiss_if_missing
 
 DB_DIR = "faiss_db"
+
+st.set_page_config(
+    page_title="📡 Telecom Knowledge Chatbot",
+    page_icon="📡",
+    layout="wide"
+)
 
 st.title("📡 Telecom Knowledge Chatbot")
 
 # -----------------------------
-# 1. Make sure FAISS exists
+# 1. Make sure FAISS DB exists
 # -----------------------------
 if not os.path.exists(DB_DIR):
-    st.error("❌ FAISS DB not found. Upload faiss_db folder to repo.")
-    st.stop()
+    st.warning("FAISS database not found. Building it from PDFs...")
+    with st.spinner("⏳ Building FAISS database... This may take a few minutes."):
+        build_faiss_if_missing()
+    st.success("✅ FAISS database created!")
 
-st.success("✅ Found FAISS database")
+else:
+    st.success("✅ FAISS database found.")
 
 # -----------------------------
 # 2. Load embeddings + DB
@@ -34,7 +43,7 @@ vectorstore = FAISS.load_local(
 )
 
 # -----------------------------
-# 3. Prompt
+# 3. Prepare prompt template
 # -----------------------------
 prompt = PromptTemplate(
     input_variables=["context", "question"],
@@ -54,7 +63,7 @@ Answer:
 )
 
 # -----------------------------
-# 4. LLM
+# 4. Load LLM
 # -----------------------------
 llm = HuggingFaceHub(
     repo_id="google/flan-t5-small",
@@ -69,14 +78,14 @@ qa = RetrievalQA.from_chain_type(
 )
 
 # -----------------------------
-# 5. UI
+# 5. Streamlit UI
 # -----------------------------
 query = st.text_input("🔍 Ask your telecom question:")
 
 if query:
-    with st.spinner("Thinking..."):
+    with st.spinner("🤖 Thinking..."):
         try:
             answer = qa.run(query)
             st.markdown(f"### 🟢 Answer\n{answer}")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"❌ Error: {e}")
