@@ -1,36 +1,24 @@
-streamlit==1.26.0
-langchain==0.1.247
-langchain-community==0.0.102
-langchain-text-splitters==0.8.0
-pydantic<2.0,>=1.10.2
+# Core
+streamlit==1.25.0      # compatible with rich < 14
+rich==13.3.4           # matches Streamlit 1.25.0
+
+# LangChain + FAISS
+langchain>=0.1.0,<1.0  # latest pip-compatible version for Python 3.10
+langchain-community>=0.0.100,<0.1
+langchain-text-splitters>=0.8.0,<1.0
+
+# FAISS + embeddings
 faiss-cpu==1.7.4
 sentence-transformers==2.2.2
 torch==2.2.0
 huggingface-hub==0.17.3
+
+# PDF / OCR
 PyPDF2==3.0.1
 pdf2image==1.16.3
 pytesseract==0.3.10
-rich==14.2.0
+
+# Utilities
 markdown-it-py==4.0.0
 mdurl==0.1.2
 pygments==2.19.2
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
