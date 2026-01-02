@@ -1,20 +1,26 @@
-# Core UI
+# 🧠 Core UI
 streamlit==1.25.0
-rich==13.3.4
-markdown-it-py<3.0.0
-pygments<3.0.0
-mdurl~=0.1
+rich==14.2.0
 
-# LangChain ecosystem (compatible)
-langchain==0.3.27
+# 📚 LangChain ecosystem
+langchain==0.3.28
 langchain-community==0.3.28
 langsmith==0.1.125
+langchain-text-splitters==0.3.10
 
-# Embeddings / Vector DB
+# 🗃️ Vector store & embeddings
 faiss-cpu==1.7.4
 sentence-transformers==2.2.2
 torch==2.2.0
 huggingface-hub==0.17.3
 
-# PDF / Docs
+# 📄 PDF + OCR support
 PyPDF2==3.0.1
+pdf2image==1.16.3
+pytesseract==0.3.10
+
+# 🧩 Utility
+mdurl==0.1.2
+markdown-it-py==<3.0.0
+pygments==2.19.2
+
