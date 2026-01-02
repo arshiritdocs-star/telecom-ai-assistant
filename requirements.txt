@@ -1,10 +1,14 @@
-streamlit==1.32.2
-pypdf==3.17.1
+pydantic<2.0,>=1.10.2
+faiss-cpu==1.7.4
+langchain==0.1.148
 sentence-transformers==2.2.2
-faiss-cpu==1.7.2
-langchain==0.1.17
-langchain-community==0.0.36
-huggingface-hub==0.20.3
+torch==2.2.0
+streamlit==1.26.0
+rich==14.2.0
+markdown-it-py==4.0.0
+mdurl==0.1.2
+pygments==2.19.2
+
 
 
 
