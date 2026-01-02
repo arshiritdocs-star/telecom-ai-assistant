@@ -1,12 +1,13 @@
-streamlit
-langchain
-langchain-community
-sentence-transformers
+langchain==0.1.17
+langchain-community==0.0.40
 faiss-cpu
-pypdf
-torch
-transformers
-scikit-learn
+sentence-transformers
+huggingface-hub==0.20.3
+pypdf==3.17.1
+streamlit==1.32.2
+uvicorn
+
+
 
 
 
