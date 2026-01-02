@@ -1,11 +1,15 @@
+streamlit==1.32.2
 langchain==0.1.17
-langchain-community==0.0.40
-faiss-cpu
-sentence-transformers
+langchain-community==0.0.36
+langchain-text-splitters==0.0.1
+faiss-cpu==1.7.4
+sentence-transformers==2.2.2
 huggingface-hub==0.20.3
 pypdf==3.17.1
-streamlit==1.32.2
+python-dotenv==1.0.1
 uvicorn
+
+
 
 
 
