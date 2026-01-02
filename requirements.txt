@@ -22,6 +22,10 @@ pytesseract==0.3.10
 
 # Prevent numpy breakage
 numpy<2
+transformers==4.41.2
+accelerate==0.30.1
+
+
 
 
 
