@@ -1,40 +1,51 @@
 import os
 import streamlit as st
+
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
-from langchain.llms import HuggingFacePipeline
+
+from langchain_community.llms import HuggingFacePipeline
 from transformers import pipeline
+
 
 DB_DIR = "faiss_db"
 
 st.title("📡 Telecom Knowledge Chatbot (No API Keys)")
 
+# -----------------------------
 # Check FAISS DB
+# -----------------------------
 if not os.path.exists(DB_DIR):
     st.error("❌ FAISS DB not found. Run build_faiss.py first.")
     st.stop()
 
 st.success("✅ FAISS DB Loaded")
 
+# -----------------------------
 # Embeddings
+# -----------------------------
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
+# -----------------------------
 # Load FAISS
+# -----------------------------
 vectorstore = FAISS.load_local(
     DB_DIR,
     embeddings,
     allow_dangerous_deserialization=True
 )
 
+# -----------------------------
 # Prompt
+# -----------------------------
 prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are a telecom expert. 
+You are a telecom expert.
 Answer simply and clearly using the context below.
 Do NOT copy text directly.
 
@@ -48,7 +59,9 @@ Answer:
 """
 )
 
-# -------- LOCAL MODEL (NO API KEY) --------
+# -----------------------------
+# Local Model (NO API KEY)
+# -----------------------------
 generator = pipeline(
     "text2text-generation",
     model="google/flan-t5-small",
@@ -57,7 +70,9 @@ generator = pipeline(
 
 llm = HuggingFacePipeline(pipeline=generator)
 
-# Retrieval QA
+# -----------------------------
+# Retrieval QA Chain
+# -----------------------------
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=vectorstore.as_retriever(search_kwargs={"k": 5}),
@@ -65,7 +80,9 @@ qa = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": prompt}
 )
 
-# UI
+# -----------------------------
+# Streamlit UI
+# -----------------------------
 query = st.text_input("🔍 Ask a telecom question:")
 
 if query:
