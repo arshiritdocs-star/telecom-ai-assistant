@@ -1,23 +1,29 @@
-# Streamlit & UI
-streamlit==1.40.1
-rich>=10.14.0,<14
-markdown-it-py==4.0.0
+# Streamlit
+streamlit==1.33.0
+
+# Rich for better logging
+rich==14.2.0
+markdown-it-py<5.0.0
 mdurl==0.1.2
 pygments==2.19.2
 
-# LangChain
-langchain-community==0.3.8
+# LangChain ecosystem
+langchain-community==0.3.28
+langsmith==0.1.125
 langchain-text-splitters==0.3.10
 
-# Vectorstore / embeddings
-faiss-cpu==1.13.2
+# Vector store & embeddings
+faiss-cpu==1.7.4
 sentence-transformers==2.2.2
 torch==2.2.0
-transformers==4.41.2
+huggingface-hub>=0.17.3,<1.0
 
-# PDF / OCR
+# PDF + OCR support
+PyPDF2==3.0.1
 pdf2image==1.16.3
 pytesseract==0.3.10
 
-# Core dependencies
+# Utilities
 numpy<2
+transformers==4.41.2
+accelerate==0.30.1
