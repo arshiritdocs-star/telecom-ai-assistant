@@ -1,28 +1,23 @@
-streamlit==1.33.0
-rich==13.7.1
+streamlit==1.40.0
 
-# LangChain ecosystem (stable)
-langchain==0.1.20
-langchain-community==0.0.38
-langsmith==0.1.125
-langchain-text-splitters==0.0.1
+# LangChain ecosystem
+langchain==0.3.10
+langchain-community==0.3.10
+langchain-text-splitters==0.3.2
+langsmith==0.2.7
 
 # Embeddings + Vector DB
-faiss-cpu==1.7.4
-sentence-transformers==2.2.2
-torch==2.2.0
-huggingface-hub==0.23.2
+faiss-cpu==1.8.0
+sentence-transformers==3.2.1
+torch==2.5.1
+huggingface-hub==0.26.2
 
 # PDF + OCR
 PyPDF2==3.0.1
-pdf2image==1.16.3
-pytesseract==0.3.10
+pdf2image==1.17.0
+pytesseract==0.3.13
 
-# Utils
-numpy<2
-markdown-it-py<4.0.0
-pygments==2.19.2
-
-# Local LLM support
-transformers==4.41.2
-accelerate==0.30.1
+# Utilities
+markdown-it-py==4.0.0
+mdurl==0.1.2
+pygments==2.19.1
