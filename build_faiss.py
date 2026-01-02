@@ -1,78 +1,75 @@
-print("CONFIRMED: USING HUGGINGFACE EMBEDDINGS")
+print("✅ USING HUGGINGFACE EMBEDDINGS")
 
 import os
-import re
-from pypdf import PdfReader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# ---------------- PATHS ----------------
-DATA_DIR = "data"                      # folder containing PDFs and text files
-DB_DIR = "faiss_db"                    # folder to save FAISS DB
+# 📂 Paths
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
+DB_DIR = os.path.join(PROJECT_DIR, "faiss_db")
 
-# ---------------- HELPER FUNCTIONS ----------------
-def clean_text(text):
-    """Remove tables, headings, repeated codes, and messy characters."""
-    text = re.sub(r"\n", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"G\.\d{3}-G\.\d{3}", "", text)       # ITU table refs
-    text = re.sub(r"SYSTEMS ON [A-Z ]+", "", text)      # headings
-    text = re.sub(r"[^\w\s,.()-]", "", text)           # other symbols
-    return text.strip()
+print(f"📂 Looking for PDFs in: {DATA_DIR}")
 
-def deduplicate_sentences(text):
-    """Remove repeated sentences across the entire dataset."""
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    seen = set()
-    deduped = []
-    for s in sentences:
-        s_clean = s.strip()
-        if s_clean.lower() not in seen:
-            deduped.append(s_clean)
-            seen.add(s_clean.lower())
-    return " ".join(deduped)
+if not os.path.exists(DATA_DIR):
+    raise FileNotFoundError(f"❌ data folder not found at: {DATA_DIR}")
 
-# ---------------- READ ALL DATA ----------------
-all_text = ""
+# 🔍 Collect PDFs
+pdf_files = [
+    os.path.join(DATA_DIR, f)
+    for f in os.listdir(DATA_DIR)
+    if f.lower().endswith(".pdf")
+]
 
-print("Reading PDFs and text files from data folder...")
+print(f"📄 PDFs found: {len(pdf_files)}")
 
-for file in os.listdir(DATA_DIR):
-    path = os.path.join(DATA_DIR, file)
-    if file.endswith(".pdf"):
-        print(f"Reading PDF: {file}")
-        reader = PdfReader(path)
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                all_text += clean_text(text) + " "
-    elif file.endswith(".txt"):
-        print(f"Reading text file: {file}")
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-            all_text += clean_text(text) + " "
+if len(pdf_files) == 0:
+    raise ValueError("❌ No PDF files found inside /data folder!")
 
-# ---------------- DEDUPLICATE ----------------
-print("Deduplicating sentences across dataset...")
-all_text = deduplicate_sentences(all_text)
+# 📥 Load pages
+docs = []
+for path in pdf_files:
+    print(f"📥 Loading: {path}")
+    loader = PyPDFLoader(path)
+    docs.extend(loader.load())
 
-# ---------------- SPLIT INTO CHUNKS ----------------
-print("Splitting text into chunks...")
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-chunks = text_splitter.split_text(all_text)
-chunks = [c for c in chunks if len(c.split()) > 20]  # discard very short chunks
-print(f"Total chunks created: {len(chunks)}")
+print(f"📑 Total pages loaded: {len(docs)}")
 
-# ---------------- LOAD HUGGINGFACE EMBEDDINGS ----------------
-print("Creating HuggingFace embeddings...")
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+if len(docs) == 0:
+    raise ValueError("❌ PDFs contain no extractable text (maybe scanned images).")
 
-# ---------------- BUILD FAISS INDEX ----------------
-print("Building FAISS index...")
-db = FAISS.from_texts(chunks, embeddings)
+# ✂️ Split text
+print("✂️ Splitting text into chunks...")
 
-# ---------------- SAVE TO DISK ----------------
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50
+)
+
+chunks = text_splitter.split_documents(docs)
+
+print(f"🧩 Total chunks created: {len(chunks)}")
+
+if len(chunks) == 0:
+    raise ValueError("❌ No chunks created — check PDFs.")
+
+# 🧠 Embeddings
+print("🧠 Loading embeddings...")
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+# 📦 Build DB
+print("📦 Building FAISS database...")
+
+db = FAISS.from_documents(chunks, embeddings)
+
 db.save_local(DB_DIR)
-print("✅ Vector database created successfully!")
-print("📁 Saved to folder:", DB_DIR)
+
+print("\n🎉 SUCCESS!")
+print(f"📁 Vector DB saved to: {DB_DIR}")
+
+
