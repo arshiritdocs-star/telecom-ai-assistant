@@ -1,3 +1,5 @@
+pip install --upgrade pip
+
 # 🧠 Core UI
 streamlit==1.25.0
 rich==14.2.0
@@ -23,4 +25,5 @@ pytesseract==0.3.10
 mdurl==0.1.2
 markdown-it-py==<3.0.0
 pygments==2.19.2
+
 
