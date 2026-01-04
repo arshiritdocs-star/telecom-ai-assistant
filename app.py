@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.prompts import PromptTemplate
@@ -10,27 +11,23 @@ from transformers import pipeline
 
 DB_DIR = "faiss_db"
 
-
-# --------------------------------------------------
-# Streamlit UI setup
-# --------------------------------------------------
 st.set_page_config(page_title="📡 Telecom Knowledge Chatbot", layout="wide")
 st.title("📡 Telecom Knowledge Chatbot (No API Keys)")
 
 
-# --------------------------------------------------
-# Verify FAISS DB Exists
-# --------------------------------------------------
+# -----------------------------------
+# Check FAISS DB exists
+# -----------------------------------
 if not os.path.exists(DB_DIR):
     st.error("❌ FAISS DB not found. Run build_faiss.py first.")
     st.stop()
-else:
-    st.success("✅ FAISS database loaded successfully")
+
+st.success("✅ FAISS DB Loaded")
 
 
-# --------------------------------------------------
-# Load embeddings & database
-# --------------------------------------------------
+# -----------------------------------
+# Load Embeddings + Vector Store
+# -----------------------------------
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -42,9 +39,9 @@ vectorstore = FAISS.load_local(
 )
 
 
-# --------------------------------------------------
+# -----------------------------------
 # Strong Anti-Hallucination Prompt
-# --------------------------------------------------
+# -----------------------------------
 prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
@@ -52,11 +49,11 @@ You are a telecom expert assistant.
 
 Think briefly before answering.
 
-Use ONLY the information in the context below.
-If the answer is not found in the context, say:
+Use ONLY the information provided in the context below.
+If the answer is not found in the context, reply:
 "I do not have enough information to answer that."
 
-Keep the explanation clear, simple, and factual.
+Keep the explanation clear, simple and factual.
 
 Context:
 {context}
@@ -69,12 +66,12 @@ Answer:
 )
 
 
-# --------------------------------------------------
-# Local LLM — Google FLAN-T5-BASE
-# --------------------------------------------------
+# -----------------------------------
+# Local LLM — no API
+# -----------------------------------
 generator = pipeline(
     "text2text-generation",
-    model="google/flan-t5-base",
+    model="google/flan-t5-small",
     max_new_tokens=128,
     temperature=0.1,
     repetition_penalty=1.2
@@ -83,21 +80,18 @@ generator = pipeline(
 llm = HuggingFacePipeline(pipeline=generator)
 
 
-# --------------------------------------------------
-# Improved Retriever (MMR)
-# --------------------------------------------------
+# -----------------------------------
+# Improved MMR Retrieval
+# -----------------------------------
 retriever = vectorstore.as_retriever(
-    search_kwargs={
-        "k": 5,
-        "fetch_k": 20
-    },
+    search_kwargs={"k": 5, "fetch_k": 20},
     search_type="mmr"
 )
 
 
-# --------------------------------------------------
-# Retrieval QA Chain
-# --------------------------------------------------
+# -----------------------------------
+# RetrievalQA Chain
+# -----------------------------------
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=retriever,
@@ -107,18 +101,17 @@ qa = RetrievalQA.from_chain_type(
 )
 
 
-# --------------------------------------------------
-# Streamlit Chat UI
-# --------------------------------------------------
+# -----------------------------------
+# UI
+# -----------------------------------
 query = st.text_input("🔍 Ask a telecom question:")
 
 if query:
     with st.spinner("Thinking..."):
         try:
             answer = qa.run(query)
-
             st.markdown("### 🟢 Answer")
             st.write(answer)
 
         except Exception as e:
-            st.error(f"⚠️ Error: {e}")
+            st.error(f"Error: {e}")
