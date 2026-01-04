@@ -10,23 +10,27 @@ from transformers import pipeline
 
 DB_DIR = "faiss_db"
 
+
+# --------------------------------------------------
+# Streamlit UI setup
+# --------------------------------------------------
 st.set_page_config(page_title="📡 Telecom Knowledge Chatbot", layout="wide")
 st.title("📡 Telecom Knowledge Chatbot (No API Keys)")
 
 
-# -----------------------------
-# Check FAISS DB
-# -----------------------------
+# --------------------------------------------------
+# Verify FAISS DB Exists
+# --------------------------------------------------
 if not os.path.exists(DB_DIR):
     st.error("❌ FAISS DB not found. Run build_faiss.py first.")
     st.stop()
+else:
+    st.success("✅ FAISS database loaded successfully")
 
-st.success("✅ FAISS DB Loaded")
 
-
-# -----------------------------
-# Load Embeddings & DB
-# -----------------------------
+# --------------------------------------------------
+# Load embeddings & database
+# --------------------------------------------------
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -38,18 +42,19 @@ vectorstore = FAISS.load_local(
 )
 
 
-# -----------------------------
-# Prompt (Hallucination-Safe)
-# -----------------------------
+# --------------------------------------------------
+# Strong Anti-Hallucination Prompt
+# --------------------------------------------------
 prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
 You are a telecom expert assistant.
 
-Use ONLY the information in the context below.
-If the answer is not found in the context, reply:
+Think briefly before answering.
 
-"I do not have enough information in the database to answer that."
+Use ONLY the information in the context below.
+If the answer is not found in the context, say:
+"I do not have enough information to answer that."
 
 Keep the explanation clear, simple, and factual.
 
@@ -64,9 +69,9 @@ Answer:
 )
 
 
-# -----------------------------
-# Local Model (No API)
-# -----------------------------
+# --------------------------------------------------
+# Local LLM — Google FLAN-T5-BASE
+# --------------------------------------------------
 generator = pipeline(
     "text2text-generation",
     model="google/flan-t5-base",
@@ -78,40 +83,42 @@ generator = pipeline(
 llm = HuggingFacePipeline(pipeline=generator)
 
 
-# -----------------------------
-# Retrieval — Improved Accuracy
-# -----------------------------
+# --------------------------------------------------
+# Improved Retriever (MMR)
+# --------------------------------------------------
 retriever = vectorstore.as_retriever(
-    search_type="mmr",
     search_kwargs={
         "k": 5,
         "fetch_k": 20
-    }
+    },
+    search_type="mmr"
 )
 
 
-# -----------------------------
+# --------------------------------------------------
 # Retrieval QA Chain
-# -----------------------------
+# --------------------------------------------------
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=retriever,
     chain_type="stuff",
-    chain_type_kwargs={"prompt": prompt}
+    chain_type_kwargs={"prompt": prompt},
+    return_source_documents=False
 )
 
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
+# --------------------------------------------------
+# Streamlit Chat UI
+# --------------------------------------------------
 query = st.text_input("🔍 Ask a telecom question:")
 
 if query:
     with st.spinner("Thinking..."):
         try:
             answer = qa.run(query)
+
             st.markdown("### 🟢 Answer")
             st.write(answer)
-        except Exception as e:
-            st.error(f"Error: {e}")
 
+        except Exception as e:
+            st.error(f"⚠️ Error: {e}")
