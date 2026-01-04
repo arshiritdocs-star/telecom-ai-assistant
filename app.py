@@ -4,7 +4,8 @@ import os
 import streamlit as st
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.prompts.prompt import PromptTemplate   # updated
+from langchain.prompts import PromptTemplate
+   # updated
 from langchain_community.chains import RetrievalQA               # updated
 from langchain_community.llms import HuggingFacePipeline        # updated
 from transformers import pipeline
@@ -91,3 +92,4 @@ if query:
             st.write(answer)
         except Exception as e:
             st.error(f"Error: {e}")
+
