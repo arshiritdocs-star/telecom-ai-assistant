@@ -69,7 +69,7 @@ Answer:
 # -----------------------------
 generator = pipeline(
     "text2text-generation",
-    model="google/flan-t5-small",
+    model="google/flan-t5-base",
     max_new_tokens=128,
     temperature=0.1,
     repetition_penalty=1.2
@@ -114,3 +114,4 @@ if query:
             st.write(answer)
         except Exception as e:
             st.error(f"Error: {e}")
+
