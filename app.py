@@ -1,23 +1,19 @@
 import os
 import streamlit as st
-import os
-import streamlit as st
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.prompts import PromptTemplate
-   # updated
 from langchain.chains import RetrievalQA
-              # updated
-from langchain_community.llms import HuggingFacePipeline        # updated
+from langchain_community.llms import HuggingFacePipeline
 from transformers import pipeline
 
-
-
-
+# -----------------------------
+# App Settings
+# -----------------------------
 DB_DIR = "faiss_db"
 
 st.set_page_config(page_title="📡 Telecom Knowledge Chatbot", layout="wide")
-st.title("📡 Telecom Knowledge Chatbot (No API Keys)")
+st.title("📡 Telecom Knowledge Chatbot (Offline & API-Free)")
 
 # -----------------------------
 # Check FAISS DB
@@ -26,12 +22,12 @@ if not os.path.exists(DB_DIR):
     st.error("❌ FAISS DB not found. Run build_faiss.py first.")
     st.stop()
 
-st.success("✅ FAISS DB Loaded")
-
 # -----------------------------
-# Load embeddings & FAISS
+# Load Embeddings + FAISS DB
 # -----------------------------
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
 vectorstore = FAISS.load_local(
     DB_DIR,
@@ -39,15 +35,22 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
+st.success("✅ Vector database loaded")
+
 # -----------------------------
-# Prompt Template
+# Safety-Focused Prompt
 # -----------------------------
 prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are a telecom expert.
-Answer simply and clearly using the context below.
-Do NOT copy text directly.
+You are a knowledgeable telecom assistant.
+
+Use ONLY the information in the context to answer.
+If the answer is not found in the context, reply:
+
+"I do not have enough information from the documents to answer that."
+
+Be clear and concise.
 
 Context:
 {context}
@@ -60,22 +63,26 @@ Answer:
 )
 
 # -----------------------------
-# Local LLM (No API Key)
+# Local HuggingFace Model (No API)
 # -----------------------------
 generator = pipeline(
     "text2text-generation",
-    model="google/flan-t5-small",
+    model="google/flan-t5-base",   # upgraded from small → better accuracy
     max_new_tokens=256
 )
 
 llm = HuggingFacePipeline(pipeline=generator)
 
 # -----------------------------
-# Retrieval QA chain
+# Retrieval QA Chain
 # -----------------------------
+retriever = vectorstore.as_retriever(
+    search_kwargs={"k": 8}   # retrieve more docs for accuracy
+)
+
 qa = RetrievalQA.from_chain_type(
     llm=llm,
-    retriever=vectorstore.as_retriever(search_kwargs={"k": 5}),
+    retriever=retriever,
     chain_type="stuff",
     chain_type_kwargs={"prompt": prompt}
 )
@@ -89,9 +96,9 @@ if query:
     with st.spinner("Thinking..."):
         try:
             answer = qa.run(query)
+
             st.markdown("### 🟢 Answer")
             st.write(answer)
+
         except Exception as e:
-            st.error(f"Error: {e}")
-
-
+            st.error(f"⚠️ Error: {e}")
