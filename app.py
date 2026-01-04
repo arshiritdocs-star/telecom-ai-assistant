@@ -34,7 +34,7 @@ vectorstore = FAISS.load_local(
 )
 
 # -----------------------------------
-# Strong Anti-Hallucination Prompt (concise & focused)
+# Strong Anti-Hallucination Prompt
 # -----------------------------------
 prompt = PromptTemplate(
     input_variables=["context", "question"],
@@ -47,13 +47,11 @@ Use ONLY the information provided in the context below.
 If the answer is not found in the context, reply:
 "I do not have enough information to answer that."
 
-Provide a concise, factual answer (1–3 sentences) strictly relevant to the question.
-Do NOT add unrelated technologies, examples, or speculations.
-
+Provide a short, complete explanation (1–2 sentences) rather than a single word.
 Format the answer as:
-- Bold the main term
-- Give a clear explanation
-- Add an example only if it is in the context
+- Bold the term being defined
+- Give a 1–2 sentence definition
+- Add a short example if possible
 
 Context:
 {context}
@@ -70,10 +68,10 @@ Answer:
 # -----------------------------------
 generator = pipeline(
     "text2text-generation",
-    model="google/flan-t5-base",  # base model for better comprehension
-    max_new_tokens=100,           # shorter, concise answers
+    model="google/flan-t5-base",  # base model for better quality
+    max_new_tokens=128,
     min_length=40,                # ensures at least 1–2 sentences
-    temperature=0.05,             # very deterministic
+    temperature=0.1,
     repetition_penalty=1.2
 )
 llm = HuggingFacePipeline(pipeline=generator)
@@ -82,7 +80,7 @@ llm = HuggingFacePipeline(pipeline=generator)
 # Improved MMR Retrieval
 # -----------------------------------
 retriever = vectorstore.as_retriever(
-    search_kwargs={"k": 4, "fetch_k": 20},  # focused retrieval
+    search_kwargs={"k": 5, "fetch_k": 40},  # more candidate chunks for better context
     search_type="mmr"
 )
 
