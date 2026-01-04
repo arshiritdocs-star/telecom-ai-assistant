@@ -17,4 +17,4 @@ torch==2.5.1
 numpy<2.0
 
 tiktoken==0.7.0
-
+transformers==4.35.0  # Add this line
